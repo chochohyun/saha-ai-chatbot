@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-# 새로 발급받은 키로 바꿔 넣기
+# api키 공유 금지!!
 client = OpenAI(api_key="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")
 
 # 문서 불러오기
