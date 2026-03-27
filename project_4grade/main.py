@@ -4,7 +4,7 @@ import json
 import numpy as np
 from openai import OpenAI
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="")
 
 DATA_DIR = "data/여권민원안내/all"
 EMBEDDINGS_CACHE = "data/여권민원안내/embeddings_cache.json"
