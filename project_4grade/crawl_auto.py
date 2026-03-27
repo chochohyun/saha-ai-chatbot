@@ -111,26 +111,33 @@ def is_bbs_view_url(url: str) -> bool:
 
 
 def extract_best_title(soup):
-    candidates = []
+    # 사하구청 패턴: <title>페이지명 | 카테고리 | 사하구청</title>
+    # "|" 구분자 기준 첫 번째 부분이 가장 정확한 페이지 제목
+    if soup.title:
+        title_text = soup.title.get_text(strip=True)
+        if "|" in title_text:
+            first = title_text.split("|")[0].strip()
+            if first and len(first) >= 2:
+                return first
 
-    selectors = [
-        "h1", "h2", "h3",
-        ".sub_title", ".title", ".tit", ".con_title", ".contit",
-        ".page-title", ".page_title", ".contents_title",
-        ".location .current", ".breadcrumb .current", "title"
-    ]
+    # fallback: 본문 영역 셀렉터
+    bad_values = {"주메뉴", "서브메뉴", "콘텐츠", "내용", "본문", "상세", "목록"}
+    bad_contains = {"Saha District Office", "사하구청", "사하구 홈페이지", "Home >", "Home>"}
 
-    for selector in selectors:
+    for selector in [".sub_title", ".tit", ".con_title", ".contit",
+                     ".page-title", ".page_title", ".contents_title",
+                     ".location .current", ".breadcrumb .current", "h2", "h3"]:
         for tag in soup.select(selector):
             text = tag.get_text(" ", strip=True)
-            if text:
-                candidates.append(text)
-
-    bad_values = {"주메뉴", "서브메뉴", "콘텐츠", "내용", "본문", "상세", "목록"}
-
-    for text in candidates:
-        if text and text not in bad_values and len(text) >= 2:
+            if not text or len(text) < 2:
+                continue
+            if text in bad_values:
+                continue
+            if any(b in text for b in bad_contains):
+                continue
             return text
+
+    return "unknown"
 
     return "unknown"
 
@@ -585,7 +592,7 @@ def extract_hwpx_text(filepath):
     return "\n".join(texts)
 
 
-def extract_hwp_text(filepath):
+def extract_hwp_text(_filepath):
     return "[HWP 추출 미지원 또는 실패 가능성 높음] 파일은 저장했지만 텍스트 추출은 별도 처리 필요"
 
 
@@ -610,43 +617,50 @@ def extract_attachment_text(filepath):
     return ""
 
 
-def extract_content(soup, url=""):
-    # 게시판 상세 페이지 우선 처리
-    if "/bbs/view.do" in url:
-        selectors = [
-            ".board_view",
-            ".bbs--view",
-            ".view_cont",
-            ".view_content",
-            ".con_view",
-            "#content"
-        ]
+_END_MARKERS = ["만족도조사", "Quick Menu", "퀵메뉴 닫기", "사이트 하단정보"]
 
-        for selector in selectors:
+
+def _trim_saha_page(text: str) -> str:
+    """
+    사하구청 페이지 전용 텍스트 정리.
+    - '인쇄하기' 이전의 헤더/메뉴 전체를 제거
+    - '만족도조사' 등 푸터 노이즈를 제거
+    """
+    # 시작 마커: 인쇄하기 이후가 실제 본문
+    if "인쇄하기" in text:
+        text = text[text.index("인쇄하기") + len("인쇄하기"):]
+
+    # 끝 마커: 만족도조사 등 이후 제거
+    for marker in _END_MARKERS:
+        if marker in text:
+            text = text[:text.index(marker)]
+
+    return text.strip()
+
+
+def extract_content(soup, url=""):
+    # script, style 먼저 제거
+    for tag in soup.find_all(["script", "style"]):
+        tag.decompose()
+
+    # 게시판 상세 페이지
+    if "/bbs/view.do" in url:
+        for selector in [".board_view", ".bbs--view", ".view_cont", ".view_content", ".con_view"]:
             tag = soup.select_one(selector)
             if tag:
-                text = clean_text(tag.get_text(" ", strip=False))
-                if len(text) > 100:
+                text = _trim_saha_page(clean_text(tag.get_text(" ", strip=False)))
+                if len(text) > 50:
                     return text
 
-    # 일반 페이지
-    candidates = [
-        soup.find("div", id="content"),
-        soup.find("div", class_="content"),
-        soup.find("div", class_="contents"),
-        soup.find("div", class_="sub_contents"),
-        soup.find("main"),
-        soup.find("article"),
-        soup.find("section"),
-    ]
-
-    for tag in candidates:
+    # 일반 페이지: 전체 텍스트에서 마커 기반으로 본문 추출
+    for selector in ["div#content", "div#contents", "main", "body"]:
+        tag = soup.select_one(selector)
         if tag:
-            text = clean_text(tag.get_text(" ", strip=False))
-            if len(text) > 100:
+            text = _trim_saha_page(clean_text(tag.get_text(" ", strip=False)))
+            if len(text) > 50:
                 return text
 
-    return clean_text(soup.get_text(" ", strip=False))
+    return _trim_saha_page(clean_text(soup.get_text(" ", strip=False)))
 
 
 def crawl_page(item, category_name):
