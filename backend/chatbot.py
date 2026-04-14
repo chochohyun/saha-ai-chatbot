@@ -4,7 +4,6 @@ from openai import OpenAI
 
 # 새로 발급받은 키로 바꿔 넣기
 client = OpenAI(api_key="")
-
 DATA_DIR = "data/여권민원안내/all"
 
 def load_documents():
