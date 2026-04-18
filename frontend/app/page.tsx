@@ -25,41 +25,12 @@ const allMenus: MenuItem[] = [
   { title: '담당부서', icon: '🏢', question: '담당 부서 찾는 방법 알려줘' },
 ];
 
-function getFakeReply(text: string) {
-  if (text.includes('전입신고')) {
-    return '전입신고는 정부24 또는 주민센터 방문을 통해 신청할 수 있습니다.';
-  }
-  if (text.includes('어린이집') || text.includes('보육')) {
-    return '어린이집 관련 문의는 보육 담당 부서 또는 관련 민원 안내 페이지를 확인해주세요.';
-  }
-  if (text.includes('주차')) {
-    return '주차 관련 민원은 정기주차, 불법주정차, 주차장 안내 등으로 나뉩니다.';
-  }
-  if (text.includes('폐기물') || text.includes('쓰레기')) {
-    return '폐기물 배출은 품목과 배출 방식에 따라 달라집니다. 대형폐기물 여부도 함께 확인해 주세요.';
-  }
-  if (text.includes('증명서')) {
-    return '증명서 발급은 정부24 또는 무인민원발급기, 주민센터 방문을 통해 가능한 경우가 많습니다.';
-  }
-  if (text.includes('보건소')) {
-    return '보건소 업무는 예방접종, 검사, 건강관리 등으로 나뉘니 원하는 항목을 구체적으로 말씀해 주세요.';
-  }
-  if (text.includes('환경')) {
-    return '환경·청소 민원은 배출, 수거, 불편 신고 등으로 나뉩니다.';
-  }
-  if (text.includes('담당 부서') || text.includes('담당부서')) {
-    return '원하시는 민원명을 말씀해 주시면 관련 담당 부서를 찾는 데 도움이 되는 안내를 드릴 수 있습니다.';
-  }
-
-  return `입력하신 내용은 "${text}" 입니다.\n현재는 테스트용 화면이라 예시 답변을 보여주고 있습니다.`;
-}
-
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const sendMessage = (text?: string) => {
+  const sendMessage = async (text?: string) => {
     const messageText = (text ?? input).trim();
     if (!messageText || isLoading) return;
 
@@ -72,28 +43,51 @@ export default function Home() {
     setInput('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: messageText }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
       const botMessage: Message = {
         role: 'bot',
-        content: getFakeReply(messageText),
+        content: data.answer ?? '답변을 불러오지 못했습니다.',
       };
 
       setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        role: 'bot',
+        content: '백엔드와 연결되지 않았거나 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
     <main className="min-h-screen bg-[#f5f6f8] px-3 py-4">
       <div className="mx-auto flex h-[92vh] w-full max-w-[430px] flex-col overflow-hidden rounded-[28px] border border-neutral-200 bg-white shadow-xl">
-        {/* 헤더 */}
         <header className="flex items-center justify-between bg-[#f3bc12] px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
               🐥
             </div>
             <div>
-              <div className="text-[19px] font-extrabold text-black">사하구청 AI 민원 챗봇</div>
+              <div className="text-[19px] font-extrabold text-black">
+                사하구청 AI 민원 챗봇
+              </div>
             </div>
           </div>
 
@@ -103,14 +97,15 @@ export default function Home() {
           </div>
         </header>
 
-        {/* 본문 */}
         <section className="flex-1 overflow-y-auto bg-[#fcfbf7] px-3 pt-3 pb-20">
           <div className="rounded-[22px] border border-gray-200 bg-[#f9fafb] px-4 py-4 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg shadow-sm">
                 🐥
               </div>
-              <div className="text-[15px] font-extrabold text-neutral-900">사하구청 AI 민원 챗봇</div>
+              <div className="text-[15px] font-extrabold text-neutral-900">
+                사하구청 AI 민원 챗봇
+              </div>
             </div>
 
             <div className="text-[14px] font-semibold leading-[1.6] text-neutral-900">
@@ -166,17 +161,8 @@ export default function Home() {
               )}
             </div>
           )}
-
-          {messages.length === 0 && isLoading && (
-            <div className="mt-4 flex justify-start">
-              <div className="max-w-[82%] rounded-[18px] border border-gray-200 bg-white px-3 py-2 text-[14px] leading-[1.5] text-gray-500 shadow-sm">
-                답변을 작성하고 있습니다... 잠시만 기다려주세요.
-              </div>
-            </div>
-          )}
         </section>
 
-        {/* 입력창 */}
         <footer className="border-t border-neutral-200 bg-[#f3bc12] px-3 py-2.5">
           <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2.5 shadow-md">
             <button type="button" className="text-[24px] text-[#f3bc12]">
