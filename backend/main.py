@@ -32,13 +32,17 @@ def load_documents():
                 filepath = os.path.join(root, filename)
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
-                        docs.append(json.load(f))
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        docs.extend([d for d in data if isinstance(d, dict)])
+                    elif isinstance(data, dict):
+                        docs.append(data)
                 except:
                     continue
     return docs
 
 def get_embedding(text):
-    text = re.sub(r"\s+", " ", text).strip()[:8000]
+    text = re.sub(r"\s+", " ", text).strip()[:3000]
     res = client.embeddings.create(input=[text], model=EMBED_MODEL)
     return res.data[0].embedding
 
@@ -52,7 +56,7 @@ def build_doc_embeddings(docs):
     print("문서 임베딩 생성 중 (최초 1회)...")
     embeddings = []
     for i, doc in enumerate(docs):
-        text = (doc.get("title", "") + " " + doc.get("content", ""))[:8000]
+        text = (doc.get("title", "") + " " + doc.get("content", ""))[:3000]
         embeddings.append(get_embedding(text))
         if (i + 1) % 10 == 0:
             print(f"  {i + 1}/{len(docs)} 완료")
