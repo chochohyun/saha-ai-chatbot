@@ -57,23 +57,30 @@ function getFakeReply(text: string) {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const sendMessage = (text?: string) => {
     const messageText = (text ?? input).trim();
-    if (!messageText) return;
+    if (!messageText || isLoading) return;
 
     const userMessage: Message = {
       role: 'user',
       content: messageText,
     };
 
-    const botMessage: Message = {
-      role: 'bot',
-      content: getFakeReply(messageText),
-    };
-
-    setMessages((prev) => [...prev, userMessage, botMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const botMessage: Message = {
+        role: 'bot',
+        content: getFakeReply(messageText),
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+      setIsLoading(false);
+    }, 1000);
   };
 
   return (
@@ -87,7 +94,6 @@ export default function Home() {
             </div>
             <div>
               <div className="text-[19px] font-extrabold text-black">사하구청 AI 민원 챗봇</div>
-              <div className="text-[12px] text-neutral-800">민원 안내 테스트 화면</div>
             </div>
           </div>
 
@@ -116,7 +122,8 @@ export default function Home() {
                 <button
                   key={item.title}
                   onClick={() => sendMessage(item.question)}
-                  className="flex min-h-[78px] flex-col items-center justify-center gap-1 rounded-[16px] border border-gray-200 bg-white px-2 py-3 shadow-sm transition hover:shadow-md"
+                  disabled={isLoading}
+                  className="flex min-h-[78px] flex-col items-center justify-center gap-1 rounded-[16px] border border-gray-200 bg-white px-2 py-3 shadow-sm transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className="text-[22px]">{item.icon}</div>
                   <div className="break-keep text-center text-[12px] font-semibold leading-[1.25] text-neutral-900">
@@ -149,6 +156,22 @@ export default function Home() {
                   </div>
                 );
               })}
+
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[82%] rounded-[18px] border border-gray-200 bg-white px-3 py-2 text-[14px] leading-[1.5] text-gray-500 shadow-sm">
+                    답변을 작성하고 있습니다... 잠시만 기다려주세요.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {messages.length === 0 && isLoading && (
+            <div className="mt-4 flex justify-start">
+              <div className="max-w-[82%] rounded-[18px] border border-gray-200 bg-white px-3 py-2 text-[14px] leading-[1.5] text-gray-500 shadow-sm">
+                답변을 작성하고 있습니다... 잠시만 기다려주세요.
+              </div>
             </div>
           )}
         </section>
@@ -168,13 +191,15 @@ export default function Home() {
                 if (e.key === 'Enter') sendMessage();
               }}
               placeholder="궁금한 내용을 입력해주세요"
+              disabled={isLoading}
             />
 
             <button
               onClick={() => sendMessage()}
-              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white"
+              disabled={isLoading}
+              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#93c5fd]"
             >
-              전송
+              {isLoading ? '답변 중...' : '전송'}
             </button>
           </div>
         </footer>
