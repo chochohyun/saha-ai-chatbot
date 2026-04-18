@@ -57,24 +57,34 @@ function getFakeReply(text: string) {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const sendMessage = (text?: string) => {
-    const messageText = (text ?? input).trim();
-    if (!messageText) return;
+  const sendMessage = async (text?: string) => {
+  const messageText = (text ?? input).trim();
+  if (!messageText || loading) return;
 
-    const userMessage: Message = {
-      role: 'user',
-      content: messageText,
-    };
+  const userMessage: Message = { role: 'user', content: messageText };
+  setMessages((prev) => [...prev, userMessage]);
+  setInput('');
+  setLoading(true);
 
-    const botMessage: Message = {
-      role: 'bot',
-      content: getFakeReply(messageText),
-    };
-
-    setMessages((prev) => [...prev, userMessage, botMessage]);
-    setInput('');
-  };
+  try {
+    const res = await fetch('http://localhost:8000/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: messageText }),
+    });
+    if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+    const data = await res.json();
+    const botMessage: Message = { role: 'bot', content: data.answer ?? '답변을 받지 못했습니다.' };
+    setMessages((prev) => [...prev, botMessage]);
+  } catch (err) {
+    const errMessage: Message = { role: 'bot', content: `오류가 발생했습니다: ${err instanceof Error ? err.message : '알 수 없는 오류'}` };
+    setMessages((prev) => [...prev, errMessage]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <main className="min-h-screen bg-[#f5f6f8] px-3 py-4">
@@ -172,9 +182,10 @@ export default function Home() {
 
             <button
               onClick={() => sendMessage()}
-              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white"
+              disabled={loading}
+              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white disabled:opacity-50"
             >
-              전송
+              {loading ? '...' : '전송'}
             </button>
           </div>
         </footer>
