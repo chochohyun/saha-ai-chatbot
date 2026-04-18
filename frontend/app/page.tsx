@@ -57,34 +57,31 @@ function getFakeReply(text: string) {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const sendMessage = async (text?: string) => {
-  const messageText = (text ?? input).trim();
-  if (!messageText || loading) return;
+  const sendMessage = (text?: string) => {
+    const messageText = (text ?? input).trim();
+    if (!messageText || isLoading) return;
 
-  const userMessage: Message = { role: 'user', content: messageText };
-  setMessages((prev) => [...prev, userMessage]);
-  setInput('');
-  setLoading(true);
+    const userMessage: Message = {
+      role: 'user',
+      content: messageText,
+    };
 
-  try {
-    const res = await fetch('http://localhost:8000/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: messageText }),
-    });
-    if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
-    const data = await res.json();
-    const botMessage: Message = { role: 'bot', content: data.answer ?? '답변을 받지 못했습니다.' };
-    setMessages((prev) => [...prev, botMessage]);
-  } catch (err) {
-    const errMessage: Message = { role: 'bot', content: `오류가 발생했습니다: ${err instanceof Error ? err.message : '알 수 없는 오류'}` };
-    setMessages((prev) => [...prev, errMessage]);
-  } finally {
-    setLoading(false);
-  }
-};
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    setTimeout(() => {
+      const botMessage: Message = {
+        role: 'bot',
+        content: getFakeReply(messageText),
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+      setIsLoading(false);
+    }, 1000);
+  };
 
   return (
     <main className="min-h-screen bg-[#f5f6f8] px-3 py-4">
@@ -97,7 +94,6 @@ export default function Home() {
             </div>
             <div>
               <div className="text-[19px] font-extrabold text-black">사하구청 AI 민원 챗봇</div>
-              <div className="text-[12px] text-neutral-800">민원 안내 테스트 화면</div>
             </div>
           </div>
 
@@ -126,7 +122,8 @@ export default function Home() {
                 <button
                   key={item.title}
                   onClick={() => sendMessage(item.question)}
-                  className="flex min-h-[78px] flex-col items-center justify-center gap-1 rounded-[16px] border border-gray-200 bg-white px-2 py-3 shadow-sm transition hover:shadow-md"
+                  disabled={isLoading}
+                  className="flex min-h-[78px] flex-col items-center justify-center gap-1 rounded-[16px] border border-gray-200 bg-white px-2 py-3 shadow-sm transition hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className="text-[22px]">{item.icon}</div>
                   <div className="break-keep text-center text-[12px] font-semibold leading-[1.25] text-neutral-900">
@@ -159,6 +156,22 @@ export default function Home() {
                   </div>
                 );
               })}
+
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[82%] rounded-[18px] border border-gray-200 bg-white px-3 py-2 text-[14px] leading-[1.5] text-gray-500 shadow-sm">
+                    답변을 작성하고 있습니다... 잠시만 기다려주세요.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {messages.length === 0 && isLoading && (
+            <div className="mt-4 flex justify-start">
+              <div className="max-w-[82%] rounded-[18px] border border-gray-200 bg-white px-3 py-2 text-[14px] leading-[1.5] text-gray-500 shadow-sm">
+                답변을 작성하고 있습니다... 잠시만 기다려주세요.
+              </div>
             </div>
           )}
         </section>
@@ -178,14 +191,15 @@ export default function Home() {
                 if (e.key === 'Enter') sendMessage();
               }}
               placeholder="궁금한 내용을 입력해주세요"
+              disabled={isLoading}
             />
 
             <button
               onClick={() => sendMessage()}
-              disabled={loading}
-              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white disabled:opacity-50"
+              disabled={isLoading}
+              className="rounded-full bg-[#3b82f6] px-3 py-1.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#93c5fd]"
             >
-              {loading ? '...' : '전송'}
+              {isLoading ? '답변 중...' : '전송'}
             </button>
           </div>
         </footer>
