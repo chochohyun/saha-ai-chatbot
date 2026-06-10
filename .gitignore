@@ -2,6 +2,5 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
-embeddings_cache.json
 .env
 node_modules

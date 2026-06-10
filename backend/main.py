@@ -12,7 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app = FastAPI()
+app = FastAPI()   
 
 app.add_middleware(
     CORSMiddleware,
@@ -87,6 +87,7 @@ doc_embeddings = load_doc_embeddings(docs)
 
 class ChatRequest(BaseModel):
     message: str
+    history: list = []
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
@@ -95,11 +96,15 @@ async def chat(req: ChatRequest):
         f"[제목] {d.get('title','')}\n[URL] {d.get('url','')}\n[본문] {d.get('content','')[:1000]}"
         for d in related
     ])
+    messages = [
+        {"role": "system", "content": f"당신은 사하구청 민원 안내 AI입니다. 아래 문서만 참고해서 친절하게 답변하세요. 모르면 사하구청에 직접 문의하라고 안내하세요.\n\n{context}"}
+    ]
+    for h in req.history:
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": req.message})
+
     response = client.chat.completions.create(
         model="gpt-4.1",
-        messages=[
-            {"role": "system", "content": f"당신은 사하구청 민원 안내 AI입니다. 아래 문서만 참고해서 답변하세요.\n\n{context}"},
-            {"role": "user", "content": req.message}
-        ]
+        messages=messages
     )
     return {"answer": response.choices[0].message.content}
