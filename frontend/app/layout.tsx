@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "사하구청 AI 민원 챗봇",
+  title: "사하구청 AI 민원 챗봇 사하루",
   description: "사하구청 민원 안내 AI 서비스",
 };
 
