@@ -2,12 +2,15 @@ import os
 import json
 import re
 import numpy as np
+from rank_bm25 import BM25Okapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# uvicorn backend.main:app --reload
+ 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -74,16 +77,39 @@ def load_doc_embeddings(docs):
             return cached
     return build_doc_embeddings(docs)
 
-def find_related_docs(question, docs, doc_embeddings, top_k=3):
+def build_bm25(docs):
+    tokenized = [
+        (d.get("title", "") + " " + d.get("content", "")).split()
+        for d in docs
+    ]
+    return BM25Okapi(tokenized)
+
+
+def find_related_docs(question, docs, doc_embeddings, bm25, top_k=3):
+    # 벡터 점수
     q_emb = np.array(get_embedding(question))
     matrix = np.array(doc_embeddings)
-    scores = matrix @ q_emb / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(q_emb))
-    top_indices = np.argsort(scores)[::-1][:top_k]
+    vector_scores = matrix @ q_emb / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(q_emb))
+
+    # BM25 점수
+    bm25_scores = np.array(bm25.get_scores(question.split()))
+
+    # 정규화 후 합산 (0~1 사이로 맞추기)
+    vector_norm = (vector_scores - vector_scores.min()) / (vector_scores.max() - vector_scores.min() + 1e-9)
+    bm25_norm = (bm25_scores - bm25_scores.min()) / (bm25_scores.max() - bm25_scores.min() + 1e-9)
+
+    # 하이브리드 점수 (벡터 60% + BM25 40%)
+    hybrid_scores = 0.6 * vector_norm + 0.4 * bm25_norm
+
+    top_indices = np.argsort(hybrid_scores)[::-1][:top_k]
     return [docs[i] for i in top_indices]
+
 
 docs = load_documents()
 print(f"문서 {len(docs)}개 로드 완료")
 doc_embeddings = load_doc_embeddings(docs)
+bm25 = build_bm25(docs)
+print("BM25 인덱스 생성 완료")
 
 class ChatRequest(BaseModel):
     message: str
@@ -91,7 +117,7 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    related = find_related_docs(req.message, docs, doc_embeddings)
+    related = find_related_docs(req.message, docs, doc_embeddings, bm25)
     context = "\n\n".join([
         f"[제목] {d.get('title','')}\n[URL] {d.get('url','')}\n[본문] {d.get('content','')[:1000]}"
         for d in related
