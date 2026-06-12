@@ -102,8 +102,8 @@ export default function Home() {
         {/* 로고 */}
         <div className="px-6 py-7 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center text-2xl shrink-0">
-              🏛️
+            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 overflow-hidden">
+              <img src="/saharu.png" alt="사하루" className="w-full h-full object-contain" />
             </div>
             <div>
               <p className="text-[17px] font-bold leading-tight">사하구청</p>
@@ -162,7 +162,7 @@ export default function Home() {
         {/* 모바일 헤더 */}
         <header className="lg:hidden flex items-center justify-between bg-[#004C97] dark:bg-[#0a1929] px-4 py-3 text-white shrink-0 shadow-md">
           <div className="flex items-center gap-2.5">
-            <span className="text-xl">🏛️</span>
+            <img src="/saharu.png" alt="사하루" className="w-8 h-8 object-contain" />
             <span className="text-[15px] font-bold">사하구청 AI 민원 챗봇</span>
           </div>
           <div className="flex gap-1.5">
@@ -201,15 +201,15 @@ export default function Home() {
           {/* 빈 상태 */}
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-5 text-center">
-              <div className="w-20 h-20 rounded-3xl bg-[#004C97]/10 dark:bg-[#004C97]/25 flex items-center justify-center text-4xl">
-                🏛️
+              <div className="w-32 h-32 flex items-center justify-center">
+                <img src="/saharu.png" alt="사하루" className="w-full h-full object-contain" />
               </div>
               <div>
                 <p className="text-[18px] font-bold text-gray-800 dark:text-gray-100">
-                  무엇을 도와드릴까요?
+                  안녕하세요! 저는 사하구청 민원 도우미 사하루입니다 😊
                 </p>
                 <p className="text-[13px] text-gray-400 dark:text-gray-500 mt-1.5 leading-relaxed">
-                  민원 정보, 복지 지원, 증명서 발급 등을<br />안내해드립니다
+                  무엇을 도와드릴까요?
                 </p>
               </div>
 
@@ -241,8 +241,8 @@ export default function Home() {
 
                   {/* 봇 아바타 */}
                   {!isUser && (
-                    <div className="w-9 h-9 rounded-2xl bg-[#004C97] flex items-center justify-center text-white text-base shrink-0 mt-0.5 shadow-sm">
-                      🏛️
+                    <div className="w-9 h-9 rounded-2xl bg-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm overflow-hidden">
+                      <img src="/saharu.png" alt="사하루" className="w-full h-full object-contain" />
                     </div>
                   )}
 
@@ -274,8 +274,8 @@ export default function Home() {
             {/* 로딩 (점 3개 bounce) */}
             {isLoading && (
               <div className="flex gap-3 justify-start">
-                <div className="w-9 h-9 rounded-2xl bg-[#004C97] flex items-center justify-center text-white text-base shrink-0 mt-0.5 shadow-sm">
-                  🏛️
+                <div className="w-9 h-9 rounded-2xl bg-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm overflow-hidden">
+                  <img src="/saharu.png" alt="사하루" className="w-full h-full object-contain" />
                 </div>
                 <div className="bg-white dark:bg-[#1c2333] border border-gray-100 dark:border-gray-700/50 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm">
                   <div className="flex gap-1.5 items-center h-4">
