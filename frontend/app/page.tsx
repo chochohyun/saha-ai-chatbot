@@ -15,15 +15,15 @@ type MenuItem = {
 };
 
 const allMenus: MenuItem[] = [
-  { title: '어린이집', icon: '🧒', question: '어린이집 관련 민원 알려줘' },
-  { title: '복지지원', icon: '🧾', question: '복지 지원 민원 알려줘' },
-  { title: '주차', icon: '🚗', question: '주차 관련 민원 안내해줘' },
-  { title: '폐기물', icon: '🗑️', question: '폐기물 배출 방법 알려줘' },
-  { title: '증명서', icon: '📄', question: '증명서 발급 방법 알려줘' },
-  { title: '보건소', icon: '🏥', question: '보건소 업무 안내해줘' },
-  { title: '환경민원', icon: '🌿', question: '환경 청소 관련 민원 알려줘' },
-  { title: '담당부서', icon: '🏢', question: '담당 부서 찾는 방법 알려줘' },
-  { title: '여권', icon: '📘', question: '여권 발급 방법 알려줘' },
+  { title: '어린이집', icon: '🧒', question: '근처 어린이집 어떻게 신청하나요?' },
+  { title: '복지지원', icon: '🧾', question: '받을 수 있는 복지 혜택이 뭐가 있나요?' },
+  { title: '주차', icon: '🚗', question: '불법 주정차 신고는 어떻게 하나요?' },
+  { title: '폐기물', icon: '🗑️', question: '대형 폐기물은 어떻게 버리나요?' },
+  { title: '증명서', icon: '📄', question: '주민등록등본은 어디서 발급받나요?' },
+  { title: '보건소', icon: '🏥', question: '보건소에서 받을 수 있는 서비스가 뭐가 있나요?' },
+  { title: '환경민원', icon: '🌿', question: '쓰레기 무단투기 신고하고 싶어요' },
+  { title: '담당부서', icon: '🏢', question: '사하구청 담당 부서 연락처 알려주세요' },
+  { title: '여권', icon: '📘', question: '여권 처음 만들려면 뭐가 필요한가요?' },
 ];
 
 function getTime() {
