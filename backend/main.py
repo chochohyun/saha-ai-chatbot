@@ -5,6 +5,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -85,7 +86,7 @@ def build_bm25(docs):
     return BM25Okapi(tokenized)
 
 
-def find_related_docs(question, docs, doc_embeddings, bm25, top_k=3):
+def find_related_docs(question, docs, doc_embeddings, bm25, top_k=5):
     # 벡터 점수
     q_emb = np.array(get_embedding(question))
     matrix = np.array(doc_embeddings)
@@ -98,8 +99,8 @@ def find_related_docs(question, docs, doc_embeddings, bm25, top_k=3):
     vector_norm = (vector_scores - vector_scores.min()) / (vector_scores.max() - vector_scores.min() + 1e-9)
     bm25_norm = (bm25_scores - bm25_scores.min()) / (bm25_scores.max() - bm25_scores.min() + 1e-9)
 
-    # 하이브리드 점수 (벡터 60% + BM25 40%)
-    hybrid_scores = 0.6 * vector_norm + 0.4 * bm25_norm
+    # 하이브리드 점수 (벡터 70% + BM25 30%)
+    hybrid_scores = 0.7 * vector_norm + 0.3 * bm25_norm
 
     top_indices = np.argsort(hybrid_scores)[::-1][:top_k]
     return [docs[i] for i in top_indices]
@@ -123,14 +124,38 @@ async def chat(req: ChatRequest):
         for d in related
     ])
     messages = [
-        {"role": "system", "content": f"당신은 사하구청 민원 안내 AI입니다. 아래 문서만 참고해서 친절하게 답변하세요. 모르면 사하구청에 직접 문의하라고 안내하세요.\n\n{context}"}
+        {"role": "system", "content": f"""당신은 부산광역시 사하구청의 공식 AI 민원 안내 서비스입니다.
+
+답변 규칙:
+1. 아래 제공된 [참고 문서]를 우선적으로 활용하여 친절하고 명확하게 답변하세요.
+2. 참고 문서에 관련 내용이 부족하더라도, 일반적인 행정 지식을 바탕으로 최대한 도움이 되는 답변을 제공하세요.
+3. 참고 문서에서 관련 내용을 찾은 경우, 답변 마지막에 출처 URL을 "📎 출처: {{url}}" 형식으로 표기하세요.
+4. 사하구 민원과 전혀 무관한 질문(예: 요리, 연예인 등)인 경우에만:
+   - "죄송합니다. 해당 내용은 제가 안내드리기 어렵습니다." 라고 안내하세요.
+   - 사하구청 대표전화: 051-220-4000 을 안내하세요.
+5. 존댓말을 사용하고, 목록이나 단계가 있을 경우 번호를 붙여 정리하세요.
+
+[참고 문서]
+{context}"""}
     ]
     for h in req.history:
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": req.message})
 
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=messages
+    async def generate():
+        stream = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=messages,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-    return {"answer": response.choices[0].message.content}

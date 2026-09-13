@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 .env
 node_modules
+data/*cache*.json
+data/page*.json
