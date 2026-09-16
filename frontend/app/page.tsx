@@ -6,25 +6,34 @@ import ChatSidebar from './components/ChatSidebar';
 import WelcomeSection from './components/WelcomeSection';
 import ChatMessageList from './components/ChatMessageList';
 import ChatInput from './components/ChatInput';
-import type { Message, FontSize, Feedback, StoredConversation } from './types';
+import FeedbackAdminModal from './components/FeedbackAdminModal';
+import type { Message, FontSize, Feedback, StoredConversation, ApiSession, ApiMessage } from './types';
 
-const CONV_STORAGE_KEY = 'saha-conversations';
+const API_BASE = 'http://127.0.0.1:8000';
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 function getTime() {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function getDateStr() {
-  return new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+function sessionToConversation(s: ApiSession): StoredConversation {
+  return {
+    id: s.session_id,
+    title: s.title ?? '제목 없음',
+    date: new Date(s.updated_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+    messages: [],
+  };
 }
 
-function loadConversations(): StoredConversation[] {
-  try { return JSON.parse(localStorage.getItem(CONV_STORAGE_KEY) ?? '[]'); } catch { return []; }
-}
-
-function saveConversations(convs: StoredConversation[]) {
-  localStorage.setItem(CONV_STORAGE_KEY, JSON.stringify(convs.slice(0, 10)));
+function apiMessageToMessage(m: ApiMessage): Message {
+  return {
+    id: String(m.message_id),
+    messageId: m.message_id,
+    role: m.sender === 'user' ? 'user' : 'bot',
+    content: m.content,
+    time: new Date(m.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+    feedback: m.feedback,
+  };
 }
 
 export default function Home() {
@@ -35,6 +44,18 @@ export default function Home() {
   const [fontSize, setFontSize] = useState<FontSize>('normal');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+
+  // ── 세션 목록 API 조회 ────────────────────────────────────────────────────
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions`);
+      if (!res.ok) return;
+      const data: ApiSession[] = await res.json();
+      setConversations(data.map(sessionToConversation));
+    } catch {}
+  };
 
   // 초기 로드
   useEffect(() => {
@@ -42,7 +63,7 @@ export default function Home() {
     if (savedDark === 'true') { setIsDark(true); document.documentElement.classList.add('dark'); }
     const savedFont = localStorage.getItem('fontSize') as FontSize | null;
     if (savedFont) setFontSize(savedFont);
-    setConversations(loadConversations());
+    fetchSessions();
   }, []);
 
   const toggleDark = () => {
@@ -57,39 +78,50 @@ export default function Home() {
     localStorage.setItem('fontSize', size);
   };
 
-  // 현재 대화 저장 후 새 대화 시작
+  // ── 새 대화 시작 ───────────────────────────────────────────────────────────
   const startNewConversation = () => {
-    if (messages.length === 0) return;
-    const firstUserMsg = messages.find(m => m.role === 'user');
-    if (!firstUserMsg) return;
-
-    const newConv: StoredConversation = {
-      id: generateId(),
-      title: firstUserMsg.content.slice(0, 28) + (firstUserMsg.content.length > 28 ? '...' : ''),
-      date: getDateStr(),
-      messages,
-    };
-    const updated = [newConv, ...conversations];
-    setConversations(updated);
-    saveConversations(updated);
+    setCurrentSessionId(null);
     setMessages([]);
+    fetchSessions();
   };
 
-  const loadConversation = (id: string) => {
-    const conv = conversations.find(c => c.id === id);
-    if (conv) setMessages(conv.messages);
+  // ── 세션 대화 이력 불러오기 ────────────────────────────────────────────────
+  const loadConversation = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/${id}/messages`);
+      if (!res.ok) return;
+      const data: ApiMessage[] = await res.json();
+      setMessages(data.map(apiMessageToMessage));
+      setCurrentSessionId(id);
+    } catch {}
   };
 
+  // ── 세션 삭제 (로컬 목록에서만 제거) ────────────────────────────────────────
   const deleteConversation = (id: string) => {
-    const updated = conversations.filter(c => c.id !== id);
-    setConversations(updated);
-    saveConversations(updated);
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (currentSessionId === id) {
+      setCurrentSessionId(null);
+      setMessages([]);
+    }
   };
 
-  const updateFeedback = (id: string, feedback: Feedback) => {
+  // ── 피드백 업데이트 ───────────────────────────────────────────────────────
+  const updateFeedback = async (id: string, feedback: Feedback) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, feedback } : m));
+
+    const msg = messages.find(m => m.id === id);
+    if (!msg?.messageId || !feedback) return;
+
+    try {
+      await fetch(`${API_BASE}/api/messages/${msg.messageId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+    } catch {}
   };
 
+  // ── 메시지 전송 ───────────────────────────────────────────────────────────
   const sendMessage = async (text?: string) => {
     const msgText = (text ?? input).trim();
     if (!msgText || isLoading) return;
@@ -103,7 +135,7 @@ export default function Home() {
     const botId = generateId();
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,6 +144,7 @@ export default function Home() {
             role: m.role === 'user' ? 'user' : 'assistant',
             content: m.content,
           })),
+          session_id: currentSessionId,
         }),
       });
 
@@ -120,7 +153,7 @@ export default function Home() {
       const contentType = res.headers.get('content-type') ?? '';
 
       if (contentType.includes('text/event-stream') && res.body) {
-        // ── SSE 스트리밍 모드 ──
+        // ── SSE 스트리밍 모드 ──────────────────────────────────────────────
         setMessages(prev => [...prev, { id: botId, role: 'bot', content: '', time: getTime(), isStreaming: true }]);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -138,23 +171,44 @@ export default function Home() {
           for (const chunk of chunks) {
             const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
             if (!dataLine) continue;
-            const data = dataLine.slice(6).trim();
-            if (data === '[DONE]') continue;
+            const raw = dataLine.slice(6).trim();
+            if (raw === '[DONE]') continue;
+
             try {
-              const parsed = JSON.parse(data);
+              const parsed = JSON.parse(raw);
+
               if (parsed.delta) {
                 accumulated += parsed.delta;
                 setMessages(prev => prev.map(m =>
                   m.id === botId ? { ...m, content: accumulated } : m
                 ));
               }
+
+              // session_id 수신 시 세션 추적 시작
+              if (parsed.session_id) {
+                setCurrentSessionId(parsed.session_id);
+              }
+
+              // 완료 이벤트: message_id 저장 + 사이드바 갱신
+              if (parsed.done) {
+                setMessages(prev => prev.map(m =>
+                  m.id === botId
+                    ? { ...m, messageId: parsed.message_id, isStreaming: false }
+                    : m
+                ));
+                fetchSessions();
+              }
             } catch {}
           }
         }
-        setMessages(prev => prev.map(m => m.id === botId ? { ...m, isStreaming: false } : m));
+
+        // 스트림 종료 후 isStreaming 보장
+        setMessages(prev => prev.map(m =>
+          m.id === botId && m.isStreaming ? { ...m, isStreaming: false } : m
+        ));
 
       } else {
-        // ── 일반 JSON 모드 (현재 백엔드) ──
+        // ── 일반 JSON 모드 ─────────────────────────────────────────────────
         const data = await res.json();
         const answer = data.answer ?? '답변을 불러오지 못했습니다.';
         setMessages(prev => [...prev, { id: botId, role: 'bot', content: answer, time: getTime() }]);
@@ -196,6 +250,7 @@ export default function Home() {
           conversations={conversations}
           onLoadConversation={loadConversation}
           onDeleteConversation={deleteConversation}
+          onOpenAdmin={() => setIsAdminOpen(true)}
         />
 
         {/* 메인 채팅 영역 */}
@@ -224,6 +279,11 @@ export default function Home() {
           />
         </div>
       </div>
+
+      {/* 피드백 관리자 모달 */}
+      {isAdminOpen && (
+        <FeedbackAdminModal apiBase={API_BASE} onClose={() => setIsAdminOpen(false)} />
+      )}
     </div>
   );
 }

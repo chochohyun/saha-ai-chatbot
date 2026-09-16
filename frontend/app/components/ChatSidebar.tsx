@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef } from 'react';
 import { MessageSquarePlus, ChevronRight, Clock, Phone, X, Trash2 } from 'lucide-react';
 import type { StoredConversation } from '../types';
 
@@ -20,11 +21,27 @@ type Props = {
   conversations: StoredConversation[];
   onLoadConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onOpenAdmin: () => void;
 };
 
 function SidebarContent({
-  isLoading, onSend, onNewConversation, conversations, onLoadConversation, onDeleteConversation, onClose,
+  isLoading, onSend, onNewConversation, conversations, onLoadConversation, onDeleteConversation, onOpenAdmin, onClose,
 }: Props & { onClose?: () => void }) {
+  const [adminClickCount, setAdminClickCount] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleAdminTrigger = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const next = adminClickCount + 1;
+    if (next >= 5) {
+      setAdminClickCount(0);
+      onOpenAdmin();
+    } else {
+      setAdminClickCount(next);
+      timerRef.current = setTimeout(() => setAdminClickCount(0), 2000);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
 
@@ -119,9 +136,12 @@ function SidebarContent({
 
       </div>
 
-      {/* 하단 콜센터 안내 */}
+      {/* 하단 콜센터 안내 (5번 클릭 → 관리자 모달 히든 트리거) */}
       <div className="px-4 pb-4 shrink-0">
-        <div className="rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40 px-4 py-4">
+        <div
+          onClick={handleAdminTrigger}
+          className="rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40 px-4 py-4 cursor-default select-none"
+        >
           <div className="flex items-center gap-2.5 mb-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#004C97] flex items-center justify-center shrink-0">
               <Phone size={14} className="text-white" />

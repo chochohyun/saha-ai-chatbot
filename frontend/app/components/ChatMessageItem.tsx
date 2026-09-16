@@ -175,10 +175,10 @@ export default function ChatMessageItem({ msg, isLastBot, onSend, onUpdateFeedba
 
               {/* 피드백 */}
               <button
-                onClick={() => onUpdateFeedback(msg.id, msg.feedback === 'good' ? null : 'good')}
+                onClick={() => onUpdateFeedback(msg.id, msg.feedback === 'like' ? null : 'like')}
                 title="도움이 됐어요"
                 className={`w-6 h-6 flex items-center justify-center rounded-md transition ${
-                  msg.feedback === 'good'
+                  msg.feedback === 'like'
                     ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-emerald-500'
                 }`}
@@ -186,10 +186,10 @@ export default function ChatMessageItem({ msg, isLastBot, onSend, onUpdateFeedba
                 <ThumbsUp size={11} />
               </button>
               <button
-                onClick={() => onUpdateFeedback(msg.id, msg.feedback === 'bad' ? null : 'bad')}
+                onClick={() => onUpdateFeedback(msg.id, msg.feedback === 'dislike' ? null : 'dislike')}
                 title="아쉬워요"
                 className={`w-6 h-6 flex items-center justify-center rounded-md transition ${
-                  msg.feedback === 'bad'
+                  msg.feedback === 'dislike'
                     ? 'bg-red-50 dark:bg-red-900/30 text-red-500'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500'
                 }`}

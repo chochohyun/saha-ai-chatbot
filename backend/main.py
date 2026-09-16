@@ -1,22 +1,28 @@
 import os
+import sys
 import json
 import re
 import numpy as np
 from rank_bm25 import BM25Okapi
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
 # uvicorn backend.main:app --reload
- 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# backend/ 디렉토리를 sys.path에 추가 (루트에서 실행 시 모듈 탐색 경로 보장)
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-app = FastAPI()   
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +30,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# DB 초기화 (테이블 없으면 자동 생성)
+from database import engine, get_db
+from models import Base
+import models  # noqa: F401 — 모델 등록 보장
+Base.metadata.create_all(bind=engine)
+
+from routers.chat_history import router as history_router, get_or_create_session, save_message
+app.include_router(history_router)
 
 DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 EMBED_MODEL = "text-embedding-3-small"
@@ -115,14 +130,26 @@ print("BM25 인덱스 생성 완료")
 class ChatRequest(BaseModel):
     message: str
     history: list = []
+    session_id: str | None = None   # 없으면 새 세션 자동 생성
 
-@app.post("/chat")
-async def chat(req: ChatRequest):
+
+@app.post("/api/chat")
+async def chat(req: ChatRequest, db: Session = Depends(get_db)):
+    # ── 1. 세션 확보 및 사용자 메시지 저장 ───────────────────────────────
+    session = get_or_create_session(req.session_id, req.message, db)
+    save_message(session.session_id, "user", req.message, db)
+
+    # ── 2. RAG 검색 및 컨텍스트 구성 ─────────────────────────────────────
     related = find_related_docs(req.message, docs, doc_embeddings, bm25)
     context = "\n\n".join([
         f"[제목] {d.get('title','')}\n[URL] {d.get('url','')}\n[본문] {d.get('content','')[:1000]}"
         for d in related
     ])
+    rag_metadata = json.dumps(
+        [{"title": d.get("title", ""), "url": d.get("url", "")} for d in related],
+        ensure_ascii=False,
+    )
+
     messages = [
         {"role": "system", "content": f"""당신은 부산광역시 사하구청의 공식 AI 민원 안내 서비스입니다.
 
@@ -142,7 +169,9 @@ async def chat(req: ChatRequest):
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": req.message})
 
+    # ── 3. 스트리밍 응답 생성 + 완료 후 bot 메시지 DB 저장 ───────────────
     async def generate():
+        full_response = []
         stream = client.chat.completions.create(
             model="gpt-4.1",
             messages=messages,
@@ -151,8 +180,13 @@ async def chat(req: ChatRequest):
         for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
-                yield f"data: {json.dumps({'delta': delta})}\n\n"
-        yield "data: [DONE]\n\n"
+                full_response.append(delta)
+                yield f"data: {json.dumps({'delta': delta, 'session_id': session.session_id})}\n\n"
+
+        # 봇 메시지 저장 (스트림 완료 후)
+        bot_content = "".join(full_response)
+        saved_msg = save_message(session.session_id, "bot", bot_content, db, rag_metadata)
+        yield f"data: {json.dumps({'done': True, 'session_id': session.session_id, 'message_id': saved_msg.message_id})}\n\n"
 
     return StreamingResponse(
         generate(),
