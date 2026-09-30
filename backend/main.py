@@ -1,28 +1,22 @@
 import os
-import sys
 import json
 import re
 import numpy as np
 from rank_bm25 import BM25Okapi
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
-from sqlalchemy.orm import Session
 
 # uvicorn backend.main:app --reload
-
+ 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# backend/ 디렉토리를 sys.path에 추가 (루트에서 실행 시 모듈 탐색 경로 보장)
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
 load_dotenv(os.path.join(BASE_DIR, "..", ".env"))
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key="")
 
-app = FastAPI()
+app = FastAPI()   
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,15 +24,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# DB 초기화 (테이블 없으면 자동 생성)
-from database import engine, get_db
-from models import Base
-import models  # noqa: F401 — 모델 등록 보장
-Base.metadata.create_all(bind=engine)
-
-from routers.chat_history import router as history_router, get_or_create_session, save_message
-app.include_router(history_router)
 
 DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 EMBED_MODEL = "text-embedding-3-small"
@@ -130,37 +115,27 @@ print("BM25 인덱스 생성 완료")
 class ChatRequest(BaseModel):
     message: str
     history: list = []
-    session_id: str | None = None   # 없으면 새 세션 자동 생성
 
-
-@app.post("/api/chat")
-async def chat(req: ChatRequest, db: Session = Depends(get_db)):
-    # ── 1. 세션 확보 및 사용자 메시지 저장 ───────────────────────────────
-    session = get_or_create_session(req.session_id, req.message, db)
-    save_message(session.session_id, "user", req.message, db)
-
-    # ── 2. RAG 검색 및 컨텍스트 구성 ─────────────────────────────────────
+@app.post("/chat")
+async def chat(req: ChatRequest):
     related = find_related_docs(req.message, docs, doc_embeddings, bm25)
     context = "\n\n".join([
         f"[제목] {d.get('title','')}\n[URL] {d.get('url','')}\n[본문] {d.get('content','')[:1000]}"
         for d in related
     ])
-    rag_metadata = json.dumps(
-        [{"title": d.get("title", ""), "url": d.get("url", "")} for d in related],
-        ensure_ascii=False,
-    )
-
     messages = [
         {"role": "system", "content": f"""당신은 부산광역시 사하구청의 공식 AI 민원 안내 서비스입니다.
 
-답변 규칙:
-1. 아래 제공된 [참고 문서]를 우선적으로 활용하여 친절하고 명확하게 답변하세요.
-2. 참고 문서에 관련 내용이 부족하더라도, 일반적인 행정 지식을 바탕으로 최대한 도움이 되는 답변을 제공하세요.
-3. 참고 문서에서 관련 내용을 찾은 경우, 답변 마지막에 출처 URL을 "📎 출처: {{url}}" 형식으로 표기하세요.
-4. 사하구 민원과 전혀 무관한 질문(예: 요리, 연예인 등)인 경우에만:
-   - "죄송합니다. 해당 내용은 제가 안내드리기 어렵습니다." 라고 안내하세요.
-   - 사하구청 대표전화: 051-220-4000 을 안내하세요.
-5. 존댓말을 사용하고, 목록이나 단계가 있을 경우 번호를 붙여 정리하세요.
+[답변 가이드라인]
+1. [기본 원칙] 제공된 [참고 문서]의 내용을 기반으로 친절하게 답변하세요.
+2. [팩트와 수치 엄격화] 
+   - 주차 요금, 진료비, 수수료, 과태료, 정확한 마감 시간 같은 '구체적인 금액이나 숫자'는 반드시 [참고 문서]에 적힌 것만 명시하세요.
+   - 문서에 정확한 금액/수치가 없다면 임의로 숫자를 지어내지 말고, "상세 요금 및 기준은 부서 확인이 필요합니다"라고 명시하세요.
+3. [일반 절차 및 방법은 유연하게 안내]
+   - 문서에 완벽한 세부 내용이 없더라도, 관련된 업무 부서, 일반적인 신청 절차, 지참 서류(신분증 등) 등 알고 있는 기본적인 공공 민원 상식은 친절히 설명해 도움을 주세요.
+   - 단, 이 경우 "실제 사하구청 기준과 다를 수 있으니 방문 전 확인이 필요합니다"라는 안내를 자연스럽게 덧붙이세요.
+4. [출처 표기] 참고 문서에 명확한 링크가 있다면 답변 말미에 "📎 출처: {{url}}"을 표기하세요.
+5. [안내 창구] 답변 끝에는 항상 필요한 경우 문의할 수 있도록 사하구청 대표전화(📞 051-220-4000)를 안내하세요.
 
 [참고 문서]
 {context}"""}
@@ -169,9 +144,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": req.message})
 
-    # ── 3. 스트리밍 응답 생성 + 완료 후 bot 메시지 DB 저장 ───────────────
     async def generate():
-        full_response = []
         stream = client.chat.completions.create(
             model="gpt-4.1",
             messages=messages,
@@ -180,13 +153,8 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
         for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
-                full_response.append(delta)
-                yield f"data: {json.dumps({'delta': delta, 'session_id': session.session_id})}\n\n"
-
-        # 봇 메시지 저장 (스트림 완료 후)
-        bot_content = "".join(full_response)
-        saved_msg = save_message(session.session_id, "bot", bot_content, db, rag_metadata)
-        yield f"data: {json.dumps({'done': True, 'session_id': session.session_id, 'message_id': saved_msg.message_id})}\n\n"
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         generate(),
