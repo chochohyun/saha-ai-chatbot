@@ -4,6 +4,30 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+class CrawlPageState(Base):
+    """URL별 본문 해시 및 마지막 수집 상태"""
+    __tablename__ = "crawl_page_states"
+
+    url = Column(Text, primary_key=True)
+    content_hash = Column(String, nullable=True)
+    last_crawled_at = Column(DateTime, nullable=True)
+    # 'seeded' | 'new' | 'changed' | 'ok' | 'failed'
+    status = Column(String, nullable=True)
+
+
+class CrawlRun(Base):
+    """증분 크롤링 실행 이력"""
+    __tablename__ = "crawl_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime)
+    finished_at = Column(DateTime, nullable=True)
+    checked_urls = Column(Integer, default=0)
+    new_count = Column(Integer, default=0)
+    changed_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 

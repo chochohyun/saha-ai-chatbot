@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+openai
+numpy
+rank-bm25
+sqlalchemy
+python-dotenv
+httpx
+openpyxl
+pandas
+tqdm
+requests
+sentence-transformers
+apscheduler
